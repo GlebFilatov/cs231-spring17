@@ -237,6 +237,7 @@ class FullyConnectedNet(object):
         # behave differently during training and testing.
         if self.use_dropout:
             self.dropout_param['mode'] = mode
+            self.dropout_mask = {}
         if self.use_batchnorm:
             for bn_param in self.bn_params:
                 bn_param['mode'] = mode
@@ -264,10 +265,15 @@ class FullyConnectedNet(object):
                 if self.use_batchnorm:
                     gamma, beta, bn_param = self.params['gamma{}'.format(layer)], self.params['beta{}'.format(layer)], self.bn_params[layer-1]
                     outgoing, cache = affine_bn_relu_forward(x,w,b, gamma, beta, bn_param)
+                if self.use_dropout:
+                    outgoing, cache = affine_relu_forward(x, w, b)
+                    outgoing, mask = dropout_forward(outgoing, self.dropout_param)
+                    self.dropout_mask[layer] = mask
                 else:
                     outgoing, cache = affine_relu_forward(x, w, b)
             incoming = outgoing
             self.cache[layer] = cache
+
         scores = outgoing
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -301,6 +307,9 @@ class FullyConnectedNet(object):
                 if self.use_batchnorm:
                     layer_l_grad, gammal_grad, betal_grad, Wl_grad, bl_grad = affine_bn_relu_backward(layer_l_grad, self.cache[layer])
                     grads['gamma{}'.format(layer)], grads['beta{}'.format(layer)] = gammal_grad, betal_grad
+                elif self.use_dropout:
+                    layer_l_grad = dropout_backward(layer_l_grad, self.dropout_mask[layer])
+                    layer_l_grad, Wl_grad, bl_grad = affine_relu_backward(layer_l_grad, self.cache[layer])
                 else:
                     layer_l_grad, Wl_grad, bl_grad = affine_relu_backward(layer_l_grad, self.cache[layer])
             grads['W{}'.format(layer)], grads['b{}'.format(layer)] = Wl_grad, bl_grad
