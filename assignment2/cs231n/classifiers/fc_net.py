@@ -48,10 +48,10 @@ class TwoLayerNet(object):
         # and biases using the keys 'W2' and 'b2'.                                 #
         ############################################################################
         self.params['W1'] = np.random.normal(loc = 0,scale = weight_scale,size = (input_dim, hidden_dim))
-        self.params['b1'] = np.zeros(hidden_dim) #input_dim
+        self.params['b1'] = np.zeros(hidden_dim)
 
         self.params['W2'] = np.random.normal(loc = 0,scale = weight_scale,size = (hidden_dim,num_classes))
-        self.params['b2'] = np.zeros(num_classes) #hidden_dim
+        self.params['b2'] = np.zeros(num_classes)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -168,7 +168,7 @@ class FullyConnectedNet(object):
         self.num_layers = 1 + len(hidden_dims)
         self.dtype = dtype
         self.params = {}
-
+        self.cache = {}
         ############################################################################
         # TODO: Initialize the parameters of the network, storing all values in    #
         # the self.params dictionary. Store weights and biases for the first layer #
@@ -181,12 +181,22 @@ class FullyConnectedNet(object):
         # beta2, etc. Scale parameters should be initialized to one and shift      #
         # parameters should be initialized to zero.                                #
         ############################################################################
-        for l in range(1,self.num_layers):
-            if l==1:
-                self.params['W{}'.format(l)] = np.random.normal(0,weight_scale,(input_dim,hidden_dims[0]))
-            else:
-                self.params['W{}'.format(l)] = np.random.normal(0, weight_scale, (hidden_dims[l-2], hidden_dims[l-1]))
-            self.params['b{}'.format(l)] = np.zeros(hidden_dims[l-1])
+        layer_number = 1
+        first_dim = input_dim
+        for d in hidden_dims:
+            self.params['W{}'.format(layer_number)] = np.random.normal(0,weight_scale,(first_dim,d))
+            self.params['b{}'.format(layer_number)] = np.zeros(d)
+
+            if self.use_batchnorm:
+                self.params['gamma{}'.format(layer_number)] = np.ones((1, 1))
+                self.params['beta{}'.format(layer_number)] = np.ones((1, 1))
+
+            first_dim = d
+            layer_number+=1
+        #last layer with (,num_classes)
+        self.params['W{}'.format(layer_number)] = np.random.normal(0, weight_scale, (first_dim, d))
+        self.params['b{}'.format(layer_number)] = np.zeros(d)
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -246,11 +256,18 @@ class FullyConnectedNet(object):
         ############################################################################
         incoming = X
         outgoing = None
-        for layer in range(1, self.num_layers):
-
+        for layer in range(1, self.num_layers+1):
             x,w,b = incoming, self.params['W{}'.format(layer)], self.params['b{}'.format(layer)]
-            outgoing, cache = affine_relu_forward(x,w,b)
+            if layer == self.num_layers:
+                outgoing, cache = affine_forward(x,w,b)
+            else:
+                if self.use_batchnorm:
+                    gamma, beta, bn_param = self.params['gamma{}'.format(layer)], self.params['beta{}'.format(layer)], self.bn_params[layer-1]
+                    outgoing, cache = affine_bn_relu_forward(x,w,b, gamma, beta, bn_param)
+                else:
+                    outgoing, cache = affine_relu_forward(x, w, b)
             incoming = outgoing
+            self.cache[layer] = cache
         scores = outgoing
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -274,7 +291,23 @@ class FullyConnectedNet(object):
         # automated tests, make sure that your L2 regularization includes a factor #
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
-        loss, dx = softmax_loss(X, y)
+        loss, grad = softmax_loss(scores, y)
+        for layer in range(self.num_layers,0,-1):
+            loss += 0.5 * self.reg * np.sum(np.power(self.params['W{}'.format(layer)], 2))
+            #special treatment for last layer
+            if layer == self.num_layers:
+                layer_l_grad, Wl_grad, bl_grad = affine_backward(grad, self.cache[layer])
+            else:
+                if self.use_batchnorm:
+                    layer_l_grad, gammal_grad, betal_grad, Wl_grad, bl_grad = affine_bn_relu_backward(layer_l_grad, self.cache[layer])
+                    grads['gamma{}'.format(layer)], grads['beta{}'.format(layer)] = gammal_grad, betal_grad
+                else:
+                    layer_l_grad, Wl_grad, bl_grad = affine_relu_backward(layer_l_grad, self.cache[layer])
+            grads['W{}'.format(layer)], grads['b{}'.format(layer)] = Wl_grad, bl_grad
+
+            #add regularization
+            grads['W{}'.format(layer)] += self.reg * self.params['W{}'.format(layer)]
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
