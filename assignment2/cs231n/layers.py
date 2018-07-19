@@ -409,18 +409,20 @@ def conv_forward_naive(x, w, b, conv_param):
     npad = ((0,0), (0,0), (pad, pad), (pad, pad))
     x = np.pad(x, pad_width=npad, mode='constant')
 
-
-
+    feature_maps = []
     for img in x:
-        hstart = 0
+        feature_map = np.zeros((n_convs, num_height_convs, num_width_convs))
         for c in range(n_convs):
-            conv = np.zeros((num_height_convs, num_width_convs, 3))
-            for h in range(num_height_convs):
+            hstart = 0
+            for hh in range(num_height_convs):
                 wstart = 0
-                for w in range(num_width_convs):
-                    conv[:, h, w] = (img[:, hstart:hstart + conv_height, wstart:wstart + conv_width] * weights).sum(axis = 1).sum(axis = 1)
+                for ww in range(num_width_convs):
+                    feature_map[c, hh, ww] = (
+                                img[:, hstart:hstart + conv_height, wstart:wstart + conv_width] * w[c]).sum() + b[c]
                     wstart += stride
                 hstart += stride
+        feature_maps.append(feature_map)
+    out = np.array(feature_maps)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
