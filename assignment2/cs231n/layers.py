@@ -447,7 +447,7 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
-    pass
+    x , w, b, conv_param = cache
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -473,7 +473,24 @@ def max_pool_forward_naive(x, pool_param):
     ###########################################################################
     # TODO: Implement the max pooling forward pass                            #
     ###########################################################################
-    pass
+    pool_height, pool_width, stride = pool_param['pool_height'], pool_param['pool_width'], pool_param['stride']
+    n_samples, n_channels, img_height, img_width = x.shape
+
+    num_height_pools = int(1 + (img_height - pool_height) / stride)
+    num_width_pools = int(1 + (img_width - pool_width) / stride)
+
+    feature_map = []
+    for img in x:
+        pooled_img = np.zeros((n_channels, num_height_pools, num_width_pools))
+        hstart = 0
+        for hh in range(num_height_pools):
+            wstart = 0
+            for ww in range(num_width_pools):
+                pooled_img[:, hh, ww] = img[:, hstart:hstart+pool_height, wstart:wstart+pool_width].max(axis = -1).max(axis = -1)
+                wstart+=stride
+            hstart+=stride
+        feature_map.append(pooled_img)
+    out = np.array(feature_map)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
